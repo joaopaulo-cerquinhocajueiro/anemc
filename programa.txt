@@ -1,0 +1,19 @@
+int x = 3;
+char y = 300;
+uint z = 200;
+schar w = 200;
+int m;
+int n;
+
+int genFun(int x; int w;){
+  return x+w*34;
+}
+
+void main(){
+  m = x+y;
+  m = genFun(x,w);
+  if(x>3){
+    y = 7;
+    z = 4;
+  }
+}
