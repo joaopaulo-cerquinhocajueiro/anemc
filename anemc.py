@@ -53,15 +53,18 @@ import ply.lex as lex
 lexer = lex.lex()
 
 variables = {}
+freeAddress = 0
 functions = {}
 
 freeRegs = [1,2,3,4,5,6,7,8,9,10,11,12]
+tempText = ''
 
 # Object Variable, to store type and value
 class Variable:
     def __init__(self,varType):
         self.type  = varType
         self.value = 0
+        self.address = 0
 
 class CFunction:
     def __init__(self,varType):
@@ -77,16 +80,14 @@ def p_program(t):
     pass
 
 def p_function(t):
-    '''function : TYPE VARIABLE LPAREN RPAREN block'''
+    '''function : TYPE VARIABLE LPAREN RPAREN block
+                | TYPE VARIABLE LPAREN declarations RPAREN block'''
+    global tempText
     functions[t[2]] = CFunction(t[1])
-    functions[t[2]].block = t[5]
-    print('defined %s function "%s"' % (t[1],t[2]))
-
-def p_function_vars(t):
-    '''function : TYPE VARIABLE LPAREN declarations RPAREN block'''
-    functions[t[2]] = CFunction(t[1])
-    functions[t[2]].block = t[6]
-    print('defined %s function "%s"' % (t[1],t[2]))
+    functions[t[2]].block = t[6] if len(t)==7 else t[5]
+    print('//%s function "%s"' % (t[1],t[2]))
+    print '%s:\t%s'%(t[2],tempText)
+    tempText = ''
 
 def p_declarations(t):
     '''declarations : declarations declaration
@@ -96,12 +97,17 @@ def p_declarations(t):
 def p_declaration(t):
     '''declaration : TYPE VARIABLE END
                    | TYPE VARIABLE RECEIVES VALUE END'''
+    global freeAddress
     variables[t[2]] = Variable(t[1])
     if len(t)==6:
-        print('defined %s "%s" with value %s' % (t[1],t[2],t[4]))
         variables[t[2]].value = t[4]
     else:
-        print('defined %s "%s"' % (t[1],t[2]))
+        variables[t[2]].value = '0'
+    register = 8 # Usado para armazenar constantes de enderecos
+    print('.constant %s = %d -- type %s' %(t[2],freeAddress,t[1]))
+    print('LIW $%d, %s'%(register,variables[t[2]].value))
+    print('SW $%d,%d'%(register,freeAddress))
+    freeAddress = freeAddress + 1
 
 def p_block(t):
     '''block : command
@@ -127,12 +133,14 @@ def p_command(t):
 
 def p_statement(t):
     '''statement  : VARIABLE RECEIVES expression END'''
-    print t[3]
-    print('SW %s,r$%d' %(t[1],t[3]))
+    global tempText
+    tempText = tempText +('SW %s,r$%d\n' %(t[1],t[3]))
+    freeRegs.append(t[3])
 
 def p_expression(t):
     '''expression : expression PLUSOP sfactor
                   | sfactor'''
+    global tempText
     if len(t)==4:
         if (t[2] == '+'):
             menmonic = 'ADD'
@@ -140,28 +148,30 @@ def p_expression(t):
             menmonic = 'SUB'
         elif (t[2] == '|'):
             menmonic = 'OR'
-        print('%s r$%d, r$%d'%(menmonic,t[1],t[3]))
+        tempText = tempText +('%s r$%d, r$%d\n'%(menmonic,t[1],t[3]))
         freeRegs.append(t[3])
     t[0] = t[1]
 
 def p_sfactor(t):
     '''sfactor : SIGN factor
                | factor'''
+    global tempText
     if len(t)==3:
-        print('INV r$%d'%t[2])
+        tempText = tempText +('INV r$%d'%t[2])
         t[0] = t[2]
     else:
         t[0] = t[1]
 
 def p_factor(t):
     '''factor : factor MULOP term'''
+    global tempText
     if (t[2] == '/'):
         menmonic = 'DIV'
     elif (t[2] == '*'):
         menmonic = 'MUL'
     elif (t[2] == '&'):
         menmonic = 'AND'
-    print('%s r$%d, r$%d'%(menmonic,t[1],t[3]))
+    tempText = tempText +('%s r$%d, r$%d\n'%(menmonic,t[1],t[3]))
     t[0] = t[1]
     freeRegs.append(t[3])
 
@@ -171,13 +181,15 @@ def p_factor_term(t):
 
 def p_term_var(t):
     '''term : VARIABLE'''
+    global tempText
     t[0] = freeRegs.pop()
-    print('LW $r%d, %s'%(t[0],t[1]))
+    tempText = tempText +('LW $r%d, %s\n'%(t[0],t[1]))
 
 def p_term_val(t):
     '''term : VALUE'''
+    global tempText
     t[0] = freeRegs.pop()
-    print('LIW $r%d, %s'%(t[0],t[1]))
+    tempText = tempText +('LIW $r%d, %s\n'%(t[0],t[1]))
 
 def p_term_pars(t):
     '''term : LPAREN expression RPAREN'''
@@ -185,20 +197,31 @@ def p_term_pars(t):
 
 def p_term_function(t):
     '''term : fcall'''
-    t[0] == t[1]
+    t[0] = t[1]
 
 def p_funcall(t):
     '''funcall : fcall END'''
     print "funcall"
 
+items = []
+
 def p_fcall(t):
     '''fcall : VARIABLE LPAREN vallist RPAREN'''
-    print('Function "%s" called' %(t[1]))
+    global tempText
+    t[0] = freeRegs.pop()
+    print 'function returns on reg %d'%t[0]
+    tempText = tempText +('JAL %s\nPOP $%d\n'%(t[1],t[0]))
 
 def p_vallist(t):
     '''vallist : vallist LISTSEP expression
                | expression'''
-    pass
+    global tempText
+    if len(t) == 2:
+        reg = t[1]
+    else:
+        reg = t[3]
+    tempText = tempText +('PUSH $%d\n'%reg)
+    freeRegs.append(reg)
 
 def p_ifblock(t):
     '''ifblock : IFCOMMAND LPAREN condition RPAREN block ELSECOMMAND block

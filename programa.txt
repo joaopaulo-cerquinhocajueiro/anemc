@@ -12,8 +12,5 @@ int genFun(int x; int w;){
 void main(){
   m = x+y;
   m = genFun(x,w);
-  if(x>3){
-    y = 7;
-    z = 4;
-  }
+  
 }
