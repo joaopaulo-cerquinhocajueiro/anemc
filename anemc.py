@@ -113,23 +113,27 @@ def p_block(t):
     '''block : command
              | LWHISKERS commandlist RWHISKERS
              | LWHISKERS RWHISKERS'''
-    print 'block'
+    pass
 
 def p_commandlist(t):
     '''commandlist : commandlist command
                    | command'''
-    print 'commandlist'
+    pass
 
 def p_command(t):
     '''command : declaration
                | statement
-               | RETURNCOMMAND expression END
+               | return
                | ifblock
                | whileblock
                | forblock
                | funcall'''
-    if t[1]==t_RETURNCOMMAND:
-        print 'return'
+    pass
+
+def p_return(t):
+    '''return : RETURNCOMMAND expression END'''
+    global tempText
+    tempText = tempText +('PUSH %d\nRET\n'%(t[2]))
 
 def p_statement(t):
     '''statement  : VARIABLE RECEIVES expression END'''
@@ -209,7 +213,6 @@ def p_fcall(t):
     '''fcall : VARIABLE LPAREN vallist RPAREN'''
     global tempText
     t[0] = freeRegs.pop()
-    print 'function returns on reg %d'%t[0]
     tempText = tempText +('JAL %s\nPOP $%d\n'%(t[1],t[0]))
 
 def p_vallist(t):
@@ -274,10 +277,10 @@ texto = programa.read()
 programa.close()
 parser.parse(texto);
 
-print('Functions:')
-for function in functions:
-    print function
-
-print('Variables:')
-for variable in variables:
-    print variable
+# print('Functions:')
+# for function in functions:
+#     print function
+#
+# print('Variables:')
+# for variable in variables:
+#     print variable
