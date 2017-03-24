@@ -5,12 +5,20 @@ schar w = 200;
 int m;
 int n;
 
-int genFun(int x; int w;){
-  return x+w*34;
+int genFun(int a, int b){
+  return a+b*34;
 }
 
 void main(){
   m = x+y;
-  m = genFun(x,w);
-  
+  if(x==y){
+    m = genFun(x,w);
+    n = 2;
+  }
+  if(x==z){
+    m = genFun(x,w);
+    n = 2;
+  } else {
+    m = genFun(w,x);
+  }
 }

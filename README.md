@@ -41,3 +41,13 @@ The types are a subset of the c types:
 ```python
 TYPE = r'(bool)|(int)|(char)|(uint)|(schar)'
 ```
+
+## Definition of the register functions# Definição dos registradores
+
+- Register $0 is hard-coded to 0, register $1 is soft-coded to 1
+- Registers $2,$3,$4,$5,$6,$7 are free registers, for arithmetic operations
+- register $8 will be used to store addressess to variables, for load and store operations
+- Registers $9,$10,$11,$12 -> are for parameter passing and function return
+- Register $13 is the stack pointer, "saved"
+- Register $14 is the data pointer, "saved"
+- Register $15 is the return address, the JAL operation links here.

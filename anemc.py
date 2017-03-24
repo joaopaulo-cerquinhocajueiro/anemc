@@ -1,4 +1,4 @@
-# -----------------------------------------------------------------------------
+# -*- coding: utf-8 -*- -----------------------------------------------------------------------------
 # anemc.py
 #
 # A compiler for the ANEM microcontroller.
@@ -56,8 +56,21 @@ variables = {}
 freeAddress = 0
 functions = {}
 
-freeRegs = [1,2,3,4,5,6,7,8,9,10,11,12]
+# Definição dos registradores
+# $0 -> 0, $1 -> 1
+# $2,$3,$4,$5,$6,$7, -> área de troca de informações com subrotinas (argumentos e retorno): "temporários"
+# $8 -> endereços contantes
+# $9,$10,$11,$12 -> "super registrador" (devem ser preservados pela chamada de uma função)
+# $13 -> stack pointer, "saved"
+# $14 -> data pointer, "saved"
+# $15 -> return address, "empilhável"
+
+freeRegs = [2,3,4,5,6,7,8,13,14,16,17,18,20,22,23,24,1,1,1,1,1,1,1]
+paramRegs = (9,10,11,12)
 tempText = ''
+ifCounter = 0;
+forCounter = 0;
+whileCounter = 0;
 
 # Object Variable, to store type and value
 class Variable:
@@ -79,20 +92,38 @@ def p_program(t):
                | function'''
     pass
 
-def p_function(t):
+def p_function(t):   # Definition of a function
     '''function : TYPE VARIABLE LPAREN RPAREN block
-                | TYPE VARIABLE LPAREN declarations RPAREN block'''
-    global tempText
+                | TYPE VARIABLE LPAREN varlist RPAREN block'''
+    global tempText  # stores the object code
+    global freeAddress # heap
+    hasParams = (len(t)==7)
+    if hasParams:
+        for idx,var in enumerate(t[4]): # each parameter goes in the heap
+            varText = '.constant %s = %d -- type %s\n'%(var[1],freeAddress,var[0])
+            varText = varText + 'LIW $8,%d\n'%(freeAddress)
+            freeAddress = freeAddress + 1
+            varText = varText + 'SW $%d,0($8)\n'%(paramRegs[idx])
+            tempText = varText + tempText
     functions[t[2]] = CFunction(t[1])
-    functions[t[2]].block = t[6] if len(t)==7 else t[5]
-    print('//%s function "%s"' % (t[1],t[2]))
-    print '%s:\t%s'%(t[2],tempText)
+    functions[t[2]].block = t[6] if hasParams else t[5]
+    print('--%s function "%s"' % (t[1],t[2]))
+    print '%s:\n%s'%(t[2],tempText)
     tempText = ''
+    if hasParams:
+        freeAddress = freeAddress - len(t[4])
 
-def p_declarations(t):
-    '''declarations : declarations declaration
-                   | declaration'''
-    pass
+def p_varlist(t):
+    '''varlist : vardecl LISTSEP varlist
+               | vardecl'''
+    if len(t) == 2:
+        t[0] = [t[1]]
+    else:
+        t[0] = t[3] + [t[1]]
+
+def p_vardecl(t):
+    '''vardecl : TYPE VARIABLE'''
+    t[0] = (t[1],t[2])
 
 def p_declaration(t):
     '''declaration : TYPE VARIABLE END
@@ -113,7 +144,10 @@ def p_block(t):
     '''block : command
              | LWHISKERS commandlist RWHISKERS
              | LWHISKERS RWHISKERS'''
-    pass
+    if len(t)==4:
+        t[0] = 'comandos\n'
+    else:
+        t[0] = 'vazio\n'
 
 def p_commandlist(t):
     '''commandlist : commandlist command
@@ -133,7 +167,7 @@ def p_command(t):
 def p_return(t):
     '''return : RETURNCOMMAND expression END'''
     global tempText
-    tempText = tempText +('PUSH %d\nRET\n'%(t[2]))
+    tempText = tempText +('MV $9,$%d\nRET\n'%(t[2]))
 
 def p_statement(t):
     '''statement  : VARIABLE RECEIVES expression END'''
@@ -212,24 +246,38 @@ items = []
 def p_fcall(t):
     '''fcall : VARIABLE LPAREN vallist RPAREN'''
     global tempText
+    tempText = tempText + '--Call to function "%s"\n' % (t[1])
+    for idx,var in enumerate(t[3]): # each parameter goes in the heap
+        tempText = tempText + 'MV $%d,$%d\n'%(paramRegs[idx],var)
+        freeRegs.append(var)
     t[0] = freeRegs.pop()
-    tempText = tempText +('JAL %s\nPOP $%d\n'%(t[1],t[0]))
+    tempText = tempText +('JAL %s\nMV $%d,$9\n'%(t[1],t[0]))
 
 def p_vallist(t):
-    '''vallist : vallist LISTSEP expression
+    '''vallist : expression LISTSEP vallist
                | expression'''
-    global tempText
     if len(t) == 2:
-        reg = t[1]
+        t[0] = [t[1]]
     else:
-        reg = t[3]
-    tempText = tempText +('PUSH $%d\n'%reg)
-    freeRegs.append(reg)
+        t[0] = t[3] + [t[1]]
 
 def p_ifblock(t):
     '''ifblock : IFCOMMAND LPAREN condition RPAREN block ELSECOMMAND block
                | IFCOMMAND LPAREN condition RPAREN block'''
-    print 'if'
+    global tempText
+    global ifCounter
+    if len(t) == 8:
+        tempText = tempText + 'beq ${},$0,%else{}%\n'.format(t[3],ifCounter)
+        tempText = tempText + t[5]
+        tempText = tempText + 'J %endif{}%\n'.format(ifCounter)
+        tempText = tempText + 'else{}:'.format(ifCounter)
+        tempText = tempText + t[7]
+        tempText = tempText + 'endif{}:'.format(ifCounter)
+    else:
+        tempText = tempText + 'beq ${},$0,%endif{}%\n'.format(t[3],ifCounter)
+        tempText = tempText + t[5]
+        tempText = tempText + 'endif{}:'.format(ifCounter)
+    ifCounter = ifCounter + 1
 
 def p_whileblock(t):
     '''whileblock : WHILECOMMAND LPAREN condition RPAREN block'''
