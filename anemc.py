@@ -92,38 +92,7 @@ def p_program(t):
                | function'''
     pass
 
-def p_function(t):   # Definition of a function
-    '''function : TYPE VARIABLE LPAREN RPAREN block
-                | TYPE VARIABLE LPAREN varlist RPAREN block'''
-    global tempText  # stores the object code
-    global freeAddress # heap
-    hasParams = (len(t)==7)
-    if hasParams:
-        for idx,var in enumerate(t[4]): # each parameter goes in the heap
-            varText = '.constant %s = %d -- type %s\n'%(var[1],freeAddress,var[0])
-            varText = varText + 'LIW $8,%d\n'%(freeAddress)
-            freeAddress = freeAddress + 1
-            varText = varText + 'SW $%d,0($8)\n'%(paramRegs[idx])
-            tempText = varText + tempText
-    functions[t[2]] = CFunction(t[1])
-    functions[t[2]].block = t[6] if hasParams else t[5]
-    print('--%s function "%s"' % (t[1],t[2]))
-    print '%s:\n%s'%(t[2],tempText)
-    tempText = ''
-    if hasParams:
-        freeAddress = freeAddress - len(t[4])
-
-def p_varlist(t):
-    '''varlist : vardecl LISTSEP varlist
-               | vardecl'''
-    if len(t) == 2:
-        t[0] = [t[1]]
-    else:
-        t[0] = t[3] + [t[1]]
-
-def p_vardecl(t):
-    '''vardecl : TYPE VARIABLE'''
-    t[0] = (t[1],t[2])
+execfile("function.py")
 
 def p_declaration(t):
     '''declaration : TYPE VARIABLE END
